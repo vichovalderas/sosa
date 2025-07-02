@@ -29,8 +29,8 @@ export default function PatternAnalysis({ patterns, currentGesture, isMobile = f
     {} as Record<string, number>,
   ) || 0;
 
-  const totalPatterns = patterns.length
-  const uniquePatterns = Object.keys(patternStats).length
+  const totalPatterns = patterns?.length || 0 
+  const uniquePatterns = Object.keys(patternStats)?.length || 0 
 
   if (isMobile) {
     return (
