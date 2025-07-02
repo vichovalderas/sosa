@@ -15,22 +15,29 @@ interface GestureAnalysis {
 }
 
 interface PatternAnalysisProps {
-  patterns: DetectedPattern[]
-  currentGesture: GestureAnalysis | null
+  patterns?: DetectedPattern[]  // Prop opcional
+  currentGesture?: GestureAnalysis | null  // Prop opcional
   isMobile?: boolean
 }
 
-export default function PatternAnalysis({ patterns, currentGesture, isMobile = false }: PatternAnalysisProps) {
-  const patternStats = patterns?.reduce(
+export default function PatternAnalysis({ 
+  patterns = [],  // Valor por defecto: array vacío
+  currentGesture = null,  // Valor por defecto: null
+  isMobile = false 
+}: PatternAnalysisProps) {
+  // 1. Calcular estadísticas de patrones de forma segura
+  const patternStats = patterns.reduce(
     (acc, pattern) => {
       acc[pattern.name] = (acc[pattern.name] || 0) + 1
       return acc
     },
     {} as Record<string, number>,
-  ) || 0;
+  )
 
-  const totalPatterns = patterns?.length || 0 
-  const uniquePatterns = Object.keys(patternStats)?.length || 0 
+  // 2. Variables protegidas
+  const totalPatterns = patterns.length
+  const uniquePatterns = Object.keys(patternStats).length
+  const hasPatterns = totalPatterns > 0
 
   if (isMobile) {
     return (
@@ -96,7 +103,7 @@ export default function PatternAnalysis({ patterns, currentGesture, isMobile = f
               </div>
             </div>
 
-            {Object.keys(patternStats).length > 0 && (
+            {uniquePatterns > 0 && (
               <div className="space-y-2">
                 <h4 className="text-sm font-semibold">Más Frecuentes</h4>
                 {Object.entries(patternStats)
@@ -116,7 +123,7 @@ export default function PatternAnalysis({ patterns, currentGesture, isMobile = f
         </Card>
 
         {/* Historial compacto */}
-        {patterns.length > 0 && (
+        {hasPatterns && (
           <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
@@ -150,7 +157,7 @@ export default function PatternAnalysis({ patterns, currentGesture, isMobile = f
     )
   }
 
-  // Vista desktop (similar pero con más espacio)
+  // Vista desktop
   return (
     <div className="grid gap-6 md:grid-cols-2">
       <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
@@ -202,7 +209,7 @@ export default function PatternAnalysis({ patterns, currentGesture, isMobile = f
             </div>
           </div>
 
-          {Object.keys(patternStats).length > 0 && (
+          {uniquePatterns > 0 && (
             <div className="space-y-2">
               <h4 className="font-semibold text-sm">Frecuencia por Tipo</h4>
               {Object.entries(patternStats)
@@ -228,7 +235,7 @@ export default function PatternAnalysis({ patterns, currentGesture, isMobile = f
         </CardHeader>
         <CardContent>
           <ScrollArea className="h-[300px]">
-            {patterns.length > 0 ? (
+            {hasPatterns ? (
               <div className="space-y-2">
                 {patterns
                   .slice()
