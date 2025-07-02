@@ -124,7 +124,7 @@ export default function Dashboard() {
         </div>
             <div className="flex items-center gap-4">
               <Badge variant="outline" className="text-sm">
-                {user?.name}
+                {user?.email}
               </Badge>
               <Button variant="outline" size="sm" onClick={handleSignOut}>
                 <LogOut className="h-4 w-4 mr-2" />
