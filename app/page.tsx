@@ -1,5 +1,5 @@
 "use client"
-
+export const dynamic = 'force-dynamic';
 import { useEffect } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
