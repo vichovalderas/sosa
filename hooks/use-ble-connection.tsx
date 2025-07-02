@@ -11,7 +11,7 @@ interface BLEConnectionState {
   connectionQuality: number
 }
 
-export function useBLEConnection(onDataReceived?: (data: DualSensorData) => void) {
+export function useBLEConnection() {
   const [state, setState] = useState<BLEConnectionState>({
     isConnected: false,
     isConnecting: false,
@@ -22,6 +22,12 @@ export function useBLEConnection(onDataReceived?: (data: DualSensorData) => void
 
   const deviceRef = useRef<BluetoothDevice | null>(null)
   const characteristicRef = useRef<BluetoothRemoteGATTCharacteristic | null>(null)
+  const dataCallbackRef = useRef<(data: DualSensorData) => void>(() => {}) // Referencia para el callback
+
+  // Función para establecer el callback desde el componente
+  const setDataCallback = useCallback((callback: (data: DualSensorData) => void) => {
+    dataCallbackRef.current = callback
+  }, [])
 
   const connect = useCallback(async () => {
     if (!navigator.bluetooth) {
@@ -88,9 +94,6 @@ export function useBLEConnection(onDataReceived?: (data: DualSensorData) => void
               const handData = parsedData.hand || parsedData.mano
 
               // Corrección de ejes: sensor rotado 90° horario
-              // Sensor: +y adelante, +x derecha, +z arriba
-              // Dispositivo: -x adelante, +y derecha, +z arriba
-              // CORRECCIÓN: intercambiar Y y Z
               const ax_original = handData.accel?.x || handData.ax || 0
               const ay_original = handData.accel?.y || handData.ay || 0
               const az_original = handData.accel?.z || handData.az || 0
@@ -99,12 +102,12 @@ export function useBLEConnection(onDataReceived?: (data: DualSensorData) => void
               const gz_original = handData.gyro?.z || handData.gz || 0
 
               dualSensorData.hand = {
-                ax: -ay_original, // -y del sensor = -x del dispositivo (adelante)
-                ay: az_original, // +z del sensor = +y del dispositivo (arriba) - CORREGIDO
-                az: ax_original, // +x del sensor = +z del dispositivo (derecha) - CORREGIDO
-                gx: -gy_original, // -y del sensor = -x del dispositivo (adelante)
-                gy: gz_original, // +z del sensor = +y del dispositivo (arriba) - CORREGIDO
-                gz: gx_original, // +x del sensor = +z del dispositivo (derecha) - CORREGIDO
+                ax: -ay_original,
+                ay: az_original,
+                az: ax_original,
+                gx: -gy_original,
+                gy: gz_original,
+                gz: gx_original,
                 timestamp: handData.timestamp || Date.now(),
                 sensorId: "hand",
                 quality: 1.0,
@@ -115,7 +118,6 @@ export function useBLEConnection(onDataReceived?: (data: DualSensorData) => void
             if (parsedData.finger || parsedData.dedo) {
               const fingerData = parsedData.finger || parsedData.dedo
 
-              // Misma corrección de ejes que la mano
               const ax_original = fingerData.accel?.x || fingerData.ax || 0
               const ay_original = fingerData.accel?.y || fingerData.ay || 0
               const az_original = fingerData.accel?.z || fingerData.az || 0
@@ -124,22 +126,22 @@ export function useBLEConnection(onDataReceived?: (data: DualSensorData) => void
               const gz_original = fingerData.gyro?.z || fingerData.gz || 0
 
               dualSensorData.finger = {
-                ax: -ay_original, // -y del sensor = -x del dispositivo (adelante)
-                ay: az_original, // +z del sensor = +y del dispositivo (arriba) - CORREGIDO
-                az: ax_original, // +x del sensor = +z del dispositivo (derecha) - CORREGIDO
-                gx: -gy_original, // -y del sensor = -x del dispositivo (adelante)
-                gy: gz_original, // +z del sensor = +y del dispositivo (arriba) - CORREGIDO
-                gz: gx_original, // +x del sensor = +z del dispositivo (derecha) - CORREGIDO
+                ax: -ay_original,
+                ay: az_original,
+                az: ax_original,
+                gx: -gy_original,
+                gy: gz_original,
+                gz: gx_original,
                 timestamp: fingerData.timestamp || Date.now(),
                 sensorId: "finger",
                 quality: 1.0,
               }
             }
 
-            // Si hay datos, enviarlos al callback
+            // Si hay datos, enviarlos al callback usando la referencia
             if (dualSensorData.hand || dualSensorData.finger) {
-              console.log("Enviando datos procesados con ejes corregidos:", dualSensorData) // Debug
-              onDataReceived?.(dualSensorData)
+              console.log("Enviando datos procesados con ejes corregidos:", dualSensorData)
+              dataCallbackRef.current(dualSensorData)
             }
 
             setState((prev) => ({
@@ -164,7 +166,7 @@ export function useBLEConnection(onDataReceived?: (data: DualSensorData) => void
         connectionQuality: 0.5,
       })
 
-      console.log("Conexión BLE establecida exitosamente") // Debug
+      console.log("Conexión BLE establecida exitosamente")
     } catch (error) {
       let errorMessage = "Error de conexión desconocido"
 
@@ -184,7 +186,7 @@ export function useBLEConnection(onDataReceived?: (data: DualSensorData) => void
         connectionError: errorMessage,
       }))
     }
-  }, [onDataReceived])
+  }, [])
 
   const disconnect = useCallback(async () => {
     try {
@@ -215,6 +217,7 @@ export function useBLEConnection(onDataReceived?: (data: DualSensorData) => void
     ...state,
     connect,
     disconnect,
+    setDataCallback, // Añadimos la función al retorno
     connectionStatus: state.connectionError ? "error" : state.isConnected ? "connected" : "disconnected",
   }
 }
