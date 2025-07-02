@@ -1,6 +1,6 @@
 "use client"
-export const dynamic = 'force-dynamic';
-import { useEffect } from "react"
+
+import { useEffect, useCallback } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Activity, Hand, TrendingUp, AlertTriangle } from "lucide-react"
@@ -16,7 +16,6 @@ import { useErrorHandler } from "@/hooks/use-error-handler"
 import Enhanced3DMotionDisplay from "@/components/enhanced-3d-motion-display"
 import { useEnhancedMotionProcessing } from "@/hooks/use-enhanced-motion-processing"
 import { useAdvancedPatternDetection } from "@/hooks/use-advanced-pattern-detection"
-import { Loader2, HandIcon, Eye, EyeOff } from "lucide-react"  
 
 export default function MPU6050HandTracker() {
   const { errors, addError, clearError } = useErrorHandler()
@@ -29,7 +28,7 @@ export default function MPU6050HandTracker() {
     disconnect,
     error: bleError,
     connectionQuality,
-    setDataCallback,
+    setDataCallback, // Asegúrate de obtener esta función
   } = useBLEConnection()
 
   const {
@@ -59,67 +58,64 @@ export default function MPU6050HandTracker() {
 
   const { detectedPatterns: advancedPatterns, currentAnalysis, updateAnalysisWindow } = useAdvancedPatternDetection()
 
-  // Configurar callback para recibir datos BLE
-  useEffect(() => {
-    setDataCallback((rawData: string) => {
-      try {
-        const parsedData = JSON.parse(rawData)
+  // Define el callback para procesar datos BLE
+  const handleRawData = useCallback((rawData: string) => {
+    try {
+      const parsedData = JSON.parse(rawData)
 
-        const dualSensorData: any = {
-          systemTimestamp: parsedData.system_timestamp || Date.now(),
-        }
-
-        if (parsedData.hand && parsedData.finger) {
-          const handPoint = {
-            ax: parsedData.hand.accel?.x || 0,
-            ay: parsedData.hand.accel?.y || 0,
-            az: parsedData.hand.accel?.z || 0,
-            gx: parsedData.hand.gyro?.x || 0,
-            gy: parsedData.hand.gyro?.y || 0,
-            gz: parsedData.hand.gyro?.z || 0,
-            timestamp: parsedData.hand.timestamp || Date.now(),
-            sensorId: "hand",
-            quality: connectionQuality,
-          }
-
-          const fingerPoint = {
-            ax: parsedData.finger.accel?.x || 0,
-            ay: parsedData.finger.accel?.y || 0,
-            az: parsedData.finger.accel?.z || 0,
-            gx: parsedData.finger.gyro?.x || 0,
-            gy: parsedData.finger.gyro?.y || 0,
-            gz: parsedData.finger.gyro?.z || 0,
-            timestamp: parsedData.finger.timestamp || Date.now(),
-            sensorId: "finger",
-            quality: connectionQuality,
-          }
-
-          // Enhanced processing
-          const processed = processMotionData(handPoint, fingerPoint)
-
-          dualSensorData.hand = processed.processedHand
-          dualSensorData.finger = processed.compensatedFinger
-        }
-
-        addDualSensorData(dualSensorData)
-
-        // Update advanced pattern detection
-        updateAnalysisWindow(
-          [dualSensorData.hand].filter(Boolean),
-          [dualSensorData.finger].filter(Boolean),
-          [dualSensorData.finger].filter(Boolean),
-        )
-
-        clearError("data-parsing")
-      } catch (error) {
-        addError(
-          "data-parsing",
-          `Error al procesar datos: ${error instanceof Error ? error.message : "Error desconocido"}`,
-        )
+      const dualSensorData: any = {
+        systemTimestamp: parsedData.system_timestamp || Date.now(),
       }
-    })
+
+      if (parsedData.hand && parsedData.finger) {
+        const handPoint = {
+          ax: parsedData.hand.accel?.x || 0,
+          ay: parsedData.hand.accel?.y || 0,
+          az: parsedData.hand.accel?.z || 0,
+          gx: parsedData.hand.gyro?.x || 0,
+          gy: parsedData.hand.gyro?.y || 0,
+          gz: parsedData.hand.gyro?.z || 0,
+          timestamp: parsedData.hand.timestamp || Date.now(),
+          sensorId: "hand",
+          quality: connectionQuality,
+        }
+
+        const fingerPoint = {
+          ax: parsedData.finger.accel?.x || 0,
+          ay: parsedData.finger.accel?.y || 0,
+          az: parsedData.finger.accel?.z || 0,
+          gx: parsedData.finger.gyro?.x || 0,
+          gy: parsedData.finger.gyro?.y || 0,
+          gz: parsedData.finger.gyro?.z || 0,
+          timestamp: parsedData.finger.timestamp || Date.now(),
+          sensorId: "finger",
+          quality: connectionQuality,
+        }
+
+        // Enhanced processing
+        const processed = processMotionData(handPoint, fingerPoint)
+
+        dualSensorData.hand = processed.processedHand
+        dualSensorData.finger = processed.compensatedFinger
+      }
+
+      addDualSensorData(dualSensorData)
+
+      // Update advanced pattern detection
+      updateAnalysisWindow(
+        [dualSensorData.hand].filter(Boolean),
+        [dualSensorData.finger].filter(Boolean),
+        [dualSensorData.finger].filter(Boolean),
+      )
+
+      clearError("data-parsing")
+    } catch (error) {
+      addError(
+        "data-parsing",
+        `Error al procesar datos: ${error instanceof Error ? error.message : "Error desconocido"}`,
+      )
+    }
   }, [
-    setDataCallback,
     addDualSensorData,
     addError,
     clearError,
@@ -127,6 +123,16 @@ export default function MPU6050HandTracker() {
     processMotionData,
     updateAnalysisWindow,
   ])
+
+  // Configurar callback para recibir datos BLE
+  useEffect(() => {
+    setDataCallback(handleRawData)
+    
+    // Limpieza al desmontar el componente
+    return () => {
+      setDataCallback(() => () => {})
+    }
+  }, [setDataCallback, handleRawData])
 
   // Manejar errores de BLE
   useEffect(() => {
