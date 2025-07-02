@@ -10,7 +10,7 @@ interface BLEConnectionState {
   connectionQuality: number
 }
 
-export function useBLEConnection() {
+export function useBLEConnection(onDataReceived: (data: any) => void) {
   const [state, setState] = useState<BLEConnectionState>({
     isConnected: false,
     isConnecting: false,
@@ -21,12 +21,6 @@ export function useBLEConnection() {
 
   const deviceRef = useRef<BluetoothDevice | null>(null)
   const characteristicRef = useRef<BluetoothRemoteGATTCharacteristic | null>(null)
-  const dataCallbackRef = useRef<(data: string) => void>(() => {}) // Referencia para el callback
-
-  // Función para establecer el callback desde el componente
-  const setDataCallback = useCallback((callback: (data: string) => void) => {
-    dataCallbackRef.current = callback
-  }, [])
 
   const connect = useCallback(async () => {
     if (!navigator.bluetooth) {
@@ -40,15 +34,13 @@ export function useBLEConnection() {
     setState((prev) => ({ ...prev, isConnecting: true, connectionError: null }))
 
     try {
-      // Solicitar dispositivo Bluetooth
       const device = await navigator.bluetooth.requestDevice({
-        filters: [{ name: "SOSA-Device" }, { namePrefix: "SOSA" }, { namePrefix: "ESP32" }],
+        filters: [{ name: "SOSA-Device" }, { namePrefix: "SOSA" }],
         optionalServices: ["12345678-1234-1234-1234-123456789abc"],
       })
 
       deviceRef.current = device
 
-      // Manejar desconexión
       device.addEventListener("gattserverdisconnected", () => {
         setState((prev) => ({
           ...prev,
@@ -58,18 +50,13 @@ export function useBLEConnection() {
         }))
       })
 
-      // Conectar al servidor GATT
       const server = await device.gatt?.connect()
       if (!server) throw new Error("No se pudo conectar al servidor GATT")
 
-      // Obtener el servicio
       const service = await server.getPrimaryService("12345678-1234-1234-1234-123456789abc")
-
-      // Obtener la característica
       const characteristic = await service.getCharacteristic("87654321-4321-4321-4321-cba987654321")
       characteristicRef.current = characteristic
 
-      // Configurar notificaciones
       await characteristic.startNotifications()
 
       characteristic.addEventListener("characteristicvaluechanged", (event) => {
@@ -79,10 +66,9 @@ export function useBLEConnection() {
             const decoder = new TextDecoder()
             const jsonString = decoder.decode(value)
 
-            console.log("Datos BLE recibidos:", jsonString) // Debug
-
-            // Send the raw JSON string to the callback for processing
-            dataCallbackRef.current(jsonString)
+            // Parsear y enviar directamente
+            const parsedData = JSON.parse(jsonString)
+            onDataReceived(parsedData)
 
             setState((prev) => ({
               ...prev,
@@ -91,10 +77,6 @@ export function useBLEConnection() {
           }
         } catch (error) {
           console.error("Error al procesar datos BLE:", error)
-          setState((prev) => ({
-            ...prev,
-            connectionQuality: Math.max(0, prev.connectionQuality - 0.2),
-          }))
         }
       })
 
@@ -105,8 +87,6 @@ export function useBLEConnection() {
         connectionError: null,
         connectionQuality: 0.5,
       })
-
-      console.log("Conexión BLE establecida exitosamente")
     } catch (error) {
       let errorMessage = "Error de conexión desconocido"
 
@@ -126,7 +106,7 @@ export function useBLEConnection() {
         connectionError: errorMessage,
       }))
     }
-  }, [])
+  }, [onDataReceived])
 
   const disconnect = useCallback(async () => {
     try {
@@ -157,7 +137,5 @@ export function useBLEConnection() {
     ...state,
     connect,
     disconnect,
-    setDataCallback, // Añadimos la función al retorno
-    connectionStatus: state.connectionError ? "error" : state.isConnected ? "connected" : "disconnected",
   }
 }
