@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useRef } from "react"
+import { useState, useCallback } from "react"
 
 export interface MotionDataPoint {
   ax: number
@@ -10,136 +10,79 @@ export interface MotionDataPoint {
   gy: number
   gz: number
   timestamp: number
-  sensorId: string
-  quality: number
 }
 
-export interface CompensatedFingerData {
+export interface CompensatedFingerData extends MotionDataPoint {
   compensated_ax: number
   compensated_ay: number
   compensated_az: number
   compensated_gx: number
   compensated_gy: number
   compensated_gz: number
-  timestamp: number
-}
-
-export interface DualSensorData {
-  hand?: MotionDataPoint
-  finger?: MotionDataPoint
-  systemTimestamp: number
-}
-
-export interface MotionStats {
-  frequency: number
-  totalSamples: number
-  lastUpdate: number
-  isActive: boolean
 }
 
 export function useMotionData() {
   const [handData, setHandData] = useState<MotionDataPoint[]>([])
   const [fingerData, setFingerData] = useState<MotionDataPoint[]>([])
   const [compensatedFingerData, setCompensatedFingerData] = useState<CompensatedFingerData[]>([])
-  const [stats, setStats] = useState<MotionStats>({
+  const [stats, setStats] = useState({
     frequency: 0,
     totalSamples: 0,
     lastUpdate: 0,
-    isActive: false,
   })
 
-  const lastUpdateRef = useRef<number>(0)
-  const sampleCountRef = useRef<number>(0)
-  const frequencyWindowRef = useRef<number[]>([])
-
-  const calculateCompensatedData = useCallback(
-    (handPoint: MotionDataPoint, fingerPoint: MotionDataPoint): CompensatedFingerData => {
-      return {
-        compensated_ax: fingerPoint.ax - handPoint.ax,
-        compensated_ay: fingerPoint.ay - handPoint.ay,
-        compensated_az: fingerPoint.az - handPoint.az,
-        compensated_gx: fingerPoint.gx - handPoint.gx,
-        compensated_gy: fingerPoint.gy - handPoint.gy,
-        compensated_gz: fingerPoint.gz - handPoint.gz,
-        timestamp: fingerPoint.timestamp,
-      }
-    },
-    [],
-  )
-
-  const updateFrequency = useCallback(() => {
+  const addDualSensorData = useCallback((rawData: any) => {
     const now = Date.now()
-    frequencyWindowRef.current.push(now)
 
-    // Mantener solo los últimos 2 segundos de muestras
-    frequencyWindowRef.current = frequencyWindowRef.current.filter((time) => now - time < 2000)
+    // Procesar datos de mano
+    if (rawData.hand && rawData.hand.accel && rawData.hand.gyro) {
+      const handPoint: MotionDataPoint = {
+        ax: rawData.hand.accel.x || 0,
+        ay: rawData.hand.accel.y || 0,
+        az: rawData.hand.accel.z || 0,
+        gx: rawData.hand.gyro.x || 0,
+        gy: rawData.hand.gyro.y || 0,
+        gz: rawData.hand.gyro.z || 0,
+        timestamp: now,
+      }
 
-    const frequency = frequencyWindowRef.current.length / 2 // Hz
+      setHandData((prev) => [...prev.slice(-99), handPoint])
+    }
 
+    // Procesar datos de dedo
+    if (rawData.finger && rawData.finger.accel && rawData.finger.gyro) {
+      const fingerPoint: MotionDataPoint = {
+        ax: rawData.finger.accel.x || 0,
+        ay: rawData.finger.accel.y || 0,
+        az: rawData.finger.accel.z || 0,
+        gx: rawData.finger.gyro.x || 0,
+        gy: rawData.finger.gyro.y || 0,
+        gz: rawData.finger.gyro.z || 0,
+        timestamp: now,
+      }
+
+      setFingerData((prev) => [...prev.slice(-99), fingerPoint])
+
+      // Crear datos compensados básicos (sin compensación real por ahora)
+      const compensatedPoint: CompensatedFingerData = {
+        ...fingerPoint,
+        compensated_ax: fingerPoint.ax,
+        compensated_ay: fingerPoint.ay,
+        compensated_az: fingerPoint.az,
+        compensated_gx: fingerPoint.gx,
+        compensated_gy: fingerPoint.gy,
+        compensated_gz: fingerPoint.gz,
+      }
+
+      setCompensatedFingerData((prev) => [...prev.slice(-99), compensatedPoint])
+    }
+
+    // Actualizar estadísticas
     setStats((prev) => ({
-      ...prev,
-      frequency,
-      totalSamples: sampleCountRef.current,
+      frequency: prev.lastUpdate > 0 ? 1000 / (now - prev.lastUpdate) : 0,
+      totalSamples: prev.totalSamples + 1,
       lastUpdate: now,
-      isActive: frequency > 0,
     }))
-  }, [])
-
-  const addDualSensorData = useCallback(
-    (data: DualSensorData) => {
-      const now = Date.now()
-
-      // Solo procesar si hay datos reales
-      if (!data.hand && !data.finger) {
-        return
-      }
-
-      console.log("Procesando datos duales:", data) // Debug
-
-      // Procesar datos de la mano
-      if (data.hand) {
-        setHandData((prev) => {
-          const newData = [...prev, data.hand!].slice(-100) // Mantener últimas 100 muestras
-          return newData
-        })
-      }
-
-      // Procesar datos del dedo
-      if (data.finger) {
-        setFingerData((prev) => {
-          const newData = [...prev, data.finger!].slice(-100) // Mantener últimas 100 muestras
-          return newData
-        })
-      }
-
-      // Calcular datos compensados si tenemos ambos sensores
-      if (data.hand && data.finger) {
-        const compensated = calculateCompensatedData(data.hand, data.finger)
-        setCompensatedFingerData((prev) => {
-          const newData = [...prev, compensated].slice(-100) // Mantener últimas 100 muestras
-          return newData
-        })
-      }
-
-      // Actualizar estadísticas
-      sampleCountRef.current++
-      updateFrequency()
-    },
-    [calculateCompensatedData, updateFrequency],
-  )
-
-  const clearData = useCallback(() => {
-    setHandData([])
-    setFingerData([])
-    setCompensatedFingerData([])
-    setStats({
-      frequency: 0,
-      totalSamples: 0,
-      lastUpdate: 0,
-      isActive: false,
-    })
-    sampleCountRef.current = 0
-    frequencyWindowRef.current = []
   }, [])
 
   const getLatestHandData = useCallback(() => {
@@ -154,11 +97,19 @@ export function useMotionData() {
     return compensatedFingerData.length > 0 ? compensatedFingerData[compensatedFingerData.length - 1] : null
   }, [compensatedFingerData])
 
+  const clearData = useCallback(() => {
+    setHandData([])
+    setFingerData([])
+    setCompensatedFingerData([])
+    setStats({ frequency: 0, totalSamples: 0, lastUpdate: 0 })
+  }, [])
+
   return {
     handData,
     fingerData,
     compensatedFingerData,
     stats,
+    addData: addDualSensorData, // Keep backward compatibility
     addDualSensorData,
     clearData,
     getLatestHandData,
