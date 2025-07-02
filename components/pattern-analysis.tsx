@@ -21,13 +21,13 @@ interface PatternAnalysisProps {
 }
 
 export default function PatternAnalysis({ patterns, currentGesture, isMobile = false }: PatternAnalysisProps) {
-  const patternStats = patterns.reduce(
+  const patternStats = patterns?.reduce(
     (acc, pattern) => {
       acc[pattern.name] = (acc[pattern.name] || 0) + 1
       return acc
     },
     {} as Record<string, number>,
-  )
+  ) || 0;
 
   const totalPatterns = patterns.length
   const uniquePatterns = Object.keys(patternStats).length
