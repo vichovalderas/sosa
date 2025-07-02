@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useCallback, useRef } from "react"
-import type { DualSensorData } from "@/hooks/use-motion-data"
 
 interface BLEConnectionState {
   isConnected: boolean
@@ -22,10 +21,10 @@ export function useBLEConnection() {
 
   const deviceRef = useRef<BluetoothDevice | null>(null)
   const characteristicRef = useRef<BluetoothRemoteGATTCharacteristic | null>(null)
-  const dataCallbackRef = useRef<(data: DualSensorData) => void>(() => {}) // Referencia para el callback
+  const dataCallbackRef = useRef<(data: string) => void>(() => {}) // Referencia para el callback
 
   // Función para establecer el callback desde el componente
-  const setDataCallback = useCallback((callback: (data: DualSensorData) => void) => {
+  const setDataCallback = useCallback((callback: (data: string) => void) => {
     dataCallbackRef.current = callback
   }, [])
 
@@ -82,67 +81,8 @@ export function useBLEConnection() {
 
             console.log("Datos BLE recibidos:", jsonString) // Debug
 
-            const parsedData = JSON.parse(jsonString)
-
-            // Procesar datos duales
-            const dualSensorData: DualSensorData = {
-              systemTimestamp: Date.now(),
-            }
-
-            // Procesar datos de la mano con corrección de ejes CORREGIDA
-            if (parsedData.hand || parsedData.mano) {
-              const handData = parsedData.hand || parsedData.mano
-
-              // Corrección de ejes: sensor rotado 90° horario
-              const ax_original = handData.accel?.x || handData.ax || 0
-              const ay_original = handData.accel?.y || handData.ay || 0
-              const az_original = handData.accel?.z || handData.az || 0
-              const gx_original = handData.gyro?.x || handData.gx || 0
-              const gy_original = handData.gyro?.y || handData.gy || 0
-              const gz_original = handData.gyro?.z || handData.gz || 0
-
-              dualSensorData.hand = {
-                ax: -ay_original,
-                ay: az_original,
-                az: ax_original,
-                gx: -gy_original,
-                gy: gz_original,
-                gz: gx_original,
-                timestamp: handData.timestamp || Date.now(),
-                sensorId: "hand",
-                quality: 1.0,
-              }
-            }
-
-            // Procesar datos del dedo con la misma corrección de ejes
-            if (parsedData.finger || parsedData.dedo) {
-              const fingerData = parsedData.finger || parsedData.dedo
-
-              const ax_original = fingerData.accel?.x || fingerData.ax || 0
-              const ay_original = fingerData.accel?.y || fingerData.ay || 0
-              const az_original = fingerData.accel?.z || fingerData.az || 0
-              const gx_original = fingerData.gyro?.x || fingerData.gx || 0
-              const gy_original = fingerData.gyro?.y || fingerData.gy || 0
-              const gz_original = fingerData.gyro?.z || fingerData.gz || 0
-
-              dualSensorData.finger = {
-                ax: -ay_original,
-                ay: az_original,
-                az: ax_original,
-                gx: -gy_original,
-                gy: gz_original,
-                gz: gx_original,
-                timestamp: fingerData.timestamp || Date.now(),
-                sensorId: "finger",
-                quality: 1.0,
-              }
-            }
-
-            // Si hay datos, enviarlos al callback usando la referencia
-            if (dualSensorData.hand || dualSensorData.finger) {
-              console.log("Enviando datos procesados con ejes corregidos:", dualSensorData)
-              dataCallbackRef.current(dualSensorData)
-            }
+            // Send the raw JSON string to the callback for processing
+            dataCallbackRef.current(jsonString)
 
             setState((prev) => ({
               ...prev,
